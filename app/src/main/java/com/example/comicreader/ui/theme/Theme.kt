@@ -5,6 +5,9 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
+/**
+ * The dark color scheme for the Comic Reader application, inspired by comic book aesthetics.
+ */
 private val ComicDarkColorScheme = darkColorScheme(
     primary = PrimaryDark,
     onPrimary = OnPrimaryDark,
@@ -24,6 +27,12 @@ private val ComicDarkColorScheme = darkColorScheme(
     onError = Color.Black
 )
 
+/**
+ * The theme for the Comic Reader application.
+ *
+ * @param darkTheme Whether to use the dark theme. Defaults to true to maintain the comic book look.
+ * @param content The composable content to apply the theme to.
+ */
 @Composable
 fun ComicReaderTheme(
     darkTheme: Boolean = true, // Force Dark Mode for Marvel/DC theme

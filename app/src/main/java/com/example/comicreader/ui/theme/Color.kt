@@ -2,7 +2,9 @@ package com.example.comicreader.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Marvel & DC Inspired Dark Palette
+/**
+ * Custom color palette inspired by Marvel and DC comic book aesthetics.
+ */
 val ComicBlack = Color(0xFF0F0F0F)
 val ComicDarkGrey = Color(0xFF1A1A1A)
 val ComicRed = Color(0xFFE23636) // Marvel Red
@@ -10,7 +12,9 @@ val ComicBlue = Color(0xFF0052CC) // DC Blue
 val ComicWhite = Color(0xFFFFFFFF)
 val ComicGrey = Color(0xFFB0B0B0)
 
-// Standard Material 3 mappings for Dark Mode
+/**
+ * Standard Material 3 color mappings for the dark mode theme.
+ */
 val PrimaryDark = ComicRed
 val OnPrimaryDark = Color.White
 val PrimaryContainerDark = Color(0xFF930006)

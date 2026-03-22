@@ -10,9 +10,19 @@ import java.io.ByteArrayOutputStream
 import java.util.regex.Pattern
 import java.util.zip.ZipInputStream
 
+/**
+ * Utility object for comic book related operations, such as reading .cbz files.
+ */
 object ComicUtils {
     private const val TAG = "ComicUtils"
 
+    /**
+     * Extracts a list of entry names representing pages from a .cbz file.
+     *
+     * @param context The [Context] for accessing the content resolver.
+     * @param uri The [Uri] of the .cbz file.
+     * @return A list of entry names, sorted in natural order.
+     */
     fun getPagesFromCbz(context: Context, uri: Uri): List<String> {
         val pages = mutableListOf<String>()
         try {
@@ -40,6 +50,12 @@ object ComicUtils {
         return sortedPages
     }
 
+    /**
+     * Checks if a filename corresponds to an image file.
+     *
+     * @param filename The name of the file to check.
+     * @return True if the file has an image extension, false otherwise.
+     */
     fun isImageFile(filename: String): Boolean {
         val lower = filename.lowercase()
         return lower.endsWith(".jpg") || lower.endsWith(".jpeg") || 
@@ -47,6 +63,14 @@ object ComicUtils {
                lower.endsWith(".bmp") || lower.endsWith(".gif")
     }
 
+    /**
+     * Retrieves the [Bitmap] for a specific entry name within a .cbz file.
+     *
+     * @param context The [Context] for accessing the content resolver.
+     * @param uri The [Uri] of the .cbz file.
+     * @param entryName The name of the file entry for the page within the archive.
+     * @return The [Bitmap] of the page, or null if it could not be retrieved.
+     */
     fun getPageBitmap(context: Context, uri: Uri, entryName: String): Bitmap? {
         try {
             context.contentResolver.openInputStream(uri)?.use { inputStream ->
@@ -77,6 +101,13 @@ object ComicUtils {
         return null
     }
 
+    /**
+     * Retrieves a thumbnail [Bitmap] for a comic from its first page.
+     *
+     * @param context The [Context] for accessing the content resolver.
+     * @param uri The [Uri] of the .cbz file.
+     * @return A downsampled [Bitmap] of the first page, or null if it could not be retrieved.
+     */
     fun getThumbnail(context: Context, uri: Uri): Bitmap? {
         try {
             // Re-open for thumbnail specifically
@@ -113,6 +144,9 @@ object ComicUtils {
     }
 }
 
+/**
+ * A [Comparator] for strings that sorts them in natural order (e.g., "page 2" before "page 10").
+ */
 class NaturalOrderComparator : Comparator<String> {
     override fun compare(s1: String, s2: String): Int {
         val p = Pattern.compile("(\\d+)")

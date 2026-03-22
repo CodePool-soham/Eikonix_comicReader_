@@ -64,6 +64,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
 
+/**
+ * The main activity of the application, serving as the entry point.
+ */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -80,6 +83,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Handles incoming intents, specifically for viewing comic files.
+     *
+     * @param intent The [Intent] to handle.
+     * @param navController The [NavHostController] used for navigation.
+     */
     private fun handleIntent(intent: Intent?, navController: NavHostController) {
         if (intent?.action == Intent.ACTION_VIEW) {
             intent.data?.let { uri ->
@@ -90,6 +99,11 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/**
+ * The main composable representing the application's navigation structure.
+ *
+ * @param navController The [NavHostController] for managing navigation between screens.
+ */
 @Composable
 fun ComicApp(navController: NavHostController) {
     NavHost(navController = navController, startDestination = "library") {
@@ -116,6 +130,11 @@ fun ComicApp(navController: NavHostController) {
     }
 }
 
+/**
+ * Composable screen for displaying the comic library.
+ *
+ * @param onComicClick Callback invoked when a comic is clicked, passing its [Uri].
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryScreen(onComicClick: (Uri) -> Unit) {
@@ -132,6 +151,9 @@ fun LibraryScreen(onComicClick: (Uri) -> Unit) {
         mutableStateOf(prefs.getString("reading_mode", "horizontal") ?: "horizontal") 
     }
 
+    /**
+     * Updates the library list based on the provided set of [Uri] strings.
+     */
     fun updateComics(uris: Set<String>) {
         scope.launch {
             isLoadingLibrary = true
@@ -356,6 +378,12 @@ fun LibraryScreen(onComicClick: (Uri) -> Unit) {
     }
 }
 
+/**
+ * Composable for displaying a single comic item in the library grid.
+ *
+ * @param comic The [Comic] data class representing the comic.
+ * @param onClick Callback invoked when the comic item is clicked.
+ */
 @Composable
 fun ComicItem(comic: Comic, onClick: () -> Unit) {
     val context = LocalContext.current
@@ -412,6 +440,17 @@ fun ComicItem(comic: Comic, onClick: () -> Unit) {
     }
 }
 
+/**
+ * A zoomable and pannable image composable for viewing comic pages.
+ *
+ * @param bitmap The [Bitmap] to display.
+ * @param onZoomChanged Callback invoked when the zoom state changes.
+ * @param pageIndex The index of this page.
+ * @param currentPage The index of the currently visible page in the pager.
+ * @param onToggleUI Callback invoked to toggle the visibility of UI overlays.
+ * @param readingMode The current reading mode ("horizontal" or "vertical").
+ * @param modifier The [Modifier] for this composable.
+ */
 @Composable
 fun ZoomableImage(
     bitmap: Bitmap,
@@ -548,6 +587,12 @@ fun ZoomableImage(
     }
 }
 
+/**
+ * Composable screen for reading a comic.
+ *
+ * @param uri The [Uri] of the comic file.
+ * @param onBack Callback invoked to navigate back.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReaderScreen(uri: Uri, onBack: () -> Unit) {
@@ -700,6 +745,18 @@ fun ReaderScreen(uri: Uri, onBack: () -> Unit) {
     }
 }
 
+/**
+ * Composable representing a single page in the comic reader.
+ *
+ * @param uri The [Uri] of the comic file.
+ * @param entryName The name of the file entry for this page within the archive.
+ * @param viewModel The [ComicViewModel] used for loading the page.
+ * @param currentPage The index of the currently visible page.
+ * @param pageIndex The index of this page.
+ * @param readingMode The current reading mode ("horizontal" or "vertical").
+ * @param onZoomChanged Callback invoked when the zoom state changes.
+ * @param onToggleUI Callback invoked to toggle the visibility of UI overlays.
+ */
 @Composable
 fun ReaderPage(
     uri: Uri,
