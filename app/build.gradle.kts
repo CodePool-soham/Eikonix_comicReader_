@@ -53,6 +53,7 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.androidx.documentfile)
     implementation(libs.androidx.compose.material.icons.extended)
+    implementation(libs.junrar)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

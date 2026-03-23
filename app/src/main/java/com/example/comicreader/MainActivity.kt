@@ -22,11 +22,9 @@ import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items as lazyItems
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -68,10 +66,13 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
 import com.example.comicreader.ui.theme.ComicReaderTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import kotlin.math.abs
 
 /**
@@ -235,7 +236,7 @@ fun LibraryScreen(onComicClick: (Uri) -> Unit) {
                         val foundUris = mutableListOf<String>()
                         pickedDir?.listFiles()?.forEach { file ->
                             val name = file.name?.lowercase() ?: ""
-                            if (name.endsWith(".cbz") || name.endsWith(".zip")) {
+                            if (name.endsWith(".cbz") || name.endsWith(".zip") || name.endsWith(".cbr") || name.endsWith(".rar")) {
                                 foundUris.add(file.uri.toString())
                             }
                         }
@@ -459,7 +460,7 @@ fun LibraryScreen(onComicClick: (Uri) -> Unit) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.align(Alignment.Center).padding(32.dp)) {
                         Text("Your library is empty", style = MaterialTheme.typography.headlineSmall)
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text("Add a folder containing .cbz files", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+                        Text("Add a folder containing .cbz or .cbr files", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
                     }
                 } else {
                     if (viewMode == LibraryViewMode.ALL_COMICS) {
@@ -536,12 +537,12 @@ fun LibraryScreen(onComicClick: (Uri) -> Unit) {
 fun ComicItem(comic: Comic, onClick: () -> Unit) {
     val context = LocalContext.current
     val viewModel: ComicViewModel = viewModel()
-    var thumbnail by remember { mutableStateOf<Bitmap?>(null) }
+    var thumbnailFile by remember { mutableStateOf<File?>(null) }
     val isCompleted = remember(comic.uri) { viewModel.isCompleted(comic.uri) }
     
     LaunchedEffect(comic.uri) {
         withContext(Dispatchers.IO) {
-            thumbnail = ComicUtils.getThumbnail(context, comic.uri)
+            thumbnailFile = ComicUtils.getThumbnailFile(context, comic.uri)
         }
     }
 
@@ -555,21 +556,31 @@ fun ComicItem(comic: Comic, onClick: () -> Unit) {
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            if (thumbnail != null) {
-                Image(
-                    bitmap = thumbnail!!.asImageBitmap(),
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            } else {
-                Box(
-                    modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+            SubcomposeAsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(thumbnailFile)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+                loading = {
+                    Box(
+                        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                    }
+                },
+                error = {
+                    Box(
+                        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Collections, contentDescription = null, tint = Color.Gray)
+                    }
                 }
-            }
+            )
             
             if (isCompleted) {
                 Icon(
@@ -609,12 +620,12 @@ fun ComicItem(comic: Comic, onClick: () -> Unit) {
 @Composable
 fun SeriesItem(group: ComicGroup, onClick: () -> Unit) {
     val context = LocalContext.current
-    var thumbnail by remember { mutableStateOf<Bitmap?>(null) }
+    var thumbnailFile by remember { mutableStateOf<File?>(null) }
     
     LaunchedEffect(group.comics.firstOrNull()?.uri) {
         group.comics.firstOrNull()?.let { firstComic ->
             withContext(Dispatchers.IO) {
-                thumbnail = ComicUtils.getThumbnail(context, firstComic.uri)
+                thumbnailFile = ComicUtils.getThumbnailFile(context, firstComic.uri)
             }
         }
     }
@@ -629,15 +640,32 @@ fun SeriesItem(group: ComicGroup, onClick: () -> Unit) {
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            if (thumbnail != null) {
-                Image(
-                    bitmap = thumbnail!!.asImageBitmap(),
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                    alpha = 0.8f
-                )
-            }
+            SubcomposeAsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(thumbnailFile)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+                alpha = 0.8f,
+                loading = {
+                    Box(
+                        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                    }
+                },
+                error = {
+                    Box(
+                        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Collections, contentDescription = null, tint = Color.Gray)
+                    }
+                }
+            )
 
             // Stack effect simulation
             Box(modifier = Modifier.fillMaxSize().padding(4.dp).background(Color.White.copy(alpha = 0.1f), MaterialTheme.shapes.medium))

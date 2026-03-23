@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
@@ -11,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
  * ViewModel for managing the state and logic related to a comic.
@@ -20,6 +22,7 @@ import kotlinx.coroutines.withContext
  * @param application The [Application] context.
  */
 class ComicViewModel(application: Application) : AndroidViewModel(application) {
+    private val TAG = "ComicViewModel"
     private val progressPrefs = application.getSharedPreferences("comic_progress", Context.MODE_PRIVATE)
     private val completedPrefs = application.getSharedPreferences("comic_completed", Context.MODE_PRIVATE)
 
@@ -41,6 +44,9 @@ class ComicViewModel(application: Application) : AndroidViewModel(application) {
      */
     val currentUri: StateFlow<Uri?> = _currentUri
 
+    private var cachedCbrFile: File? = null
+    private var cachedCbrUri: Uri? = null
+
     /**
      * Loads the comic from the given [Uri].
      *
@@ -52,8 +58,27 @@ class ComicViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _isLoading.value = true
             _currentUri.value = uri
+            
             val pages = withContext(Dispatchers.IO) {
-                ComicUtils.getPagesFromCbz(getApplication(), uri)
+                try {
+                    val fileName = ComicUtils.getFileName(getApplication(), uri) ?: ""
+                    if (fileName.lowercase().endsWith(".cbr")) {
+                        // For CBR, we cache the temp file to avoid repeated copies
+                        if (cachedCbrUri != uri || cachedCbrFile == null || !cachedCbrFile!!.exists()) {
+                            clearCachedCbr()
+                            val tempFile = File(getApplication<Application>().cacheDir, "comic_${System.currentTimeMillis()}.cbr")
+                            ComicUtils.copyUriToFile(getApplication(), uri, tempFile)
+                            cachedCbrFile = tempFile
+                            cachedCbrUri = uri
+                        }
+                        ComicUtils.getPagesFromCbr(cachedCbrFile!!)
+                    } else {
+                        ComicUtils.getPagesFromCbz(getApplication(), uri)
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error loading comic pages", e)
+                    emptyList<String>()
+                }
             }
             _currentComicPages.value = pages
             _isLoading.value = false
@@ -69,8 +94,38 @@ class ComicViewModel(application: Application) : AndroidViewModel(application) {
      */
     suspend fun getPageBitmap(uri: Uri, entryName: String): Bitmap? {
         return withContext(Dispatchers.IO) {
-            ComicUtils.getPageBitmap(getApplication(), uri, entryName)
+            try {
+                val fileName = ComicUtils.getFileName(getApplication(), uri) ?: ""
+                if (fileName.lowercase().endsWith(".cbr")) {
+                    if (cachedCbrUri == uri && cachedCbrFile != null && cachedCbrFile!!.exists()) {
+                        ComicUtils.getPageBitmapFromCbr(cachedCbrFile!!, entryName)
+                    } else {
+                        // Fallback if not cached (should not happen in reader)
+                        val tempFile = File(getApplication<Application>().cacheDir, "page_${System.currentTimeMillis()}.cbr")
+                        ComicUtils.copyUriToFile(getApplication(), uri, tempFile)
+                        val bitmap = ComicUtils.getPageBitmapFromCbr(tempFile, entryName)
+                        tempFile.delete()
+                        bitmap
+                    }
+                } else {
+                    ComicUtils.getPageBitmapFromCbz(getApplication(), uri, entryName)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error getting page bitmap", e)
+                null
+            }
         }
+    }
+
+    private fun clearCachedCbr() {
+        cachedCbrFile?.delete()
+        cachedCbrFile = null
+        cachedCbrUri = null
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        clearCachedCbr()
     }
 
     /**

@@ -39,6 +39,9 @@
                 <data android:mimeType="application/zip" />
                 <data android:mimeType="application/x-zip-compressed" />
                 <data android:mimeType="application/vnd.comicbook+zip" />
+                <data android:mimeType="application/vnd.comicbook-rar" />
+                <data android:mimeType="application/x-rar-compressed" />
+                <data android:mimeType="application/rar" />
                 <data android:mimeType="application/octet-stream" />
             </intent-filter>
 
@@ -52,8 +55,12 @@
                 <data android:host="*" />
                 <data android:pathPattern=".*\\.cbz" />
                 <data android:pathPattern=".*\\.CBZ" />
+                <data android:pathPattern=".*\\.cbr" />
+                <data android:pathPattern=".*\\.CBR" />
                 <data android:pathPattern=".*\\.zip" />
                 <data android:pathPattern=".*\\.ZIP" />
+                <data android:pathPattern=".*\\.rar" />
+                <data android:pathPattern=".*\\.RAR" />
             </intent-filter>
         </activity>
     </application>
