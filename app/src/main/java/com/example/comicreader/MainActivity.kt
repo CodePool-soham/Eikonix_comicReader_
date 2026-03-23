@@ -299,8 +299,13 @@ fun LibraryScreen(onComicClick: (Uri) -> Unit) {
         )
     }
 
-    BackHandler(enabled = selectedGroupTitle != null) {
-        selectedGroupTitle = null
+    BackHandler(enabled = selectedGroupTitle != null || isSearching) {
+        if (isSearching) {
+            isSearching = false
+            searchQuery = ""
+        } else {
+            selectedGroupTitle = null
+        }
     }
 
     ModalNavigationDrawer(
@@ -358,8 +363,13 @@ fun LibraryScreen(onComicClick: (Uri) -> Unit) {
                         onQueryChange = { searchQuery = it },
                         onSearch = { isSearching = false },
                         active = true,
-                        onActiveChange = { isSearching = it },
-                        placeholder = { Text("Search your comics...") },
+                        onActiveChange = { 
+                            if (!it) {
+                                isSearching = false
+                                searchQuery = ""
+                            }
+                        },
+                        placeholder = { Text("Search your comics...", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)) },
                         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                         trailingIcon = {
                             IconButton(onClick = { 
@@ -368,28 +378,30 @@ fun LibraryScreen(onComicClick: (Uri) -> Unit) {
                                 Icon(Icons.Default.Close, contentDescription = null)
                             }
                         },
+                        colors = SearchBarDefaults.colors(
+                            containerColor = Color.Transparent,
+                        ),
+                        tonalElevation = 0.dp,
+                        shadowElevation = 0.dp,
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
                     ) {
-                        if (searchQuery.isNotEmpty()) {
-                            LazyColumn(
-                                modifier = Modifier.fillMaxSize()
+                        Surface(
+                            modifier = Modifier.fillMaxSize(),
+                            color = MaterialTheme.colorScheme.background.copy(alpha = 0.9f)
+                        ) {
+                            LazyVerticalGrid(
+                                columns = GridCells.Adaptive(150.dp),
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                lazyItems(filteredComics.take(10)) { comic ->
-                                    ListItem(
-                                        headlineContent = { 
-                                            Text(
-                                                comic.name,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        },
-                                        leadingContent = { Icon(Icons.Default.Search, contentDescription = null) },
-                                        modifier = Modifier.clickable {
-                                            searchQuery = comic.name
-                                            isSearching = false
-                                            onComicClick(comic.uri)
-                                        }
-                                    )
+                                items(items = filteredComics, key = { it.uri.toString() }) { comic ->
+                                    ComicItem(comic = comic, onClick = {
+                                        isSearching = false
+                                        searchQuery = ""
+                                        onComicClick(comic.uri)
+                                    })
                                 }
                             }
                         }
