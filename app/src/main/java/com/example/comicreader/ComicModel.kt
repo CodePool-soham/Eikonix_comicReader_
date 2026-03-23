@@ -20,6 +20,22 @@ data class Comic(
 )
 
 /**
+ * Data class representing a group of comics with the same title.
+ */
+data class ComicGroup(
+    val title: String,
+    val comics: List<Comic>
+)
+
+/**
+ * Enum representing the different view modes in the library.
+ */
+enum class LibraryViewMode {
+    ALL_COMICS,
+    SERIES
+}
+
+/**
  * Data class representing a single page within a comic.
  *
  * @property entryName The name of the file entry within the comic archive.

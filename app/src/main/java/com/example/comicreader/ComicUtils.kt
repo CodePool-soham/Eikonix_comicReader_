@@ -31,8 +31,8 @@ object ComicUtils {
                 ZipInputStream(BufferedInputStream(inputStream)).use { zipInputStream ->
                     var entry = zipInputStream.nextEntry
                     while (entry != null) {
-                        if (!entry.isDirectory && 
-                            !entry.name.contains("__MACOSX", ignoreCase = true) && 
+                        if (!entry.isDirectory &&
+                            !entry.name.contains("__MACOSX", ignoreCase = true) &&
                             isImageFile(entry.name)) {
                             pages.add(entry.name)
                         }
@@ -44,7 +44,7 @@ object ComicUtils {
         } catch (e: Exception) {
             Log.e(TAG, "Error reading CBZ pages from $uri", e)
         }
-        
+
         val sortedPages = pages.sortedWith(NaturalOrderComparator())
         Log.d(TAG, "Found ${sortedPages.size} pages for $uri")
         return sortedPages
@@ -85,7 +85,7 @@ object ComicUtils {
                                 outputStream.write(buffer, 0, len)
                             }
                             val data = outputStream.toByteArray()
-                            
+
                             val options = BitmapFactory.Options()
                             options.inPreferredConfig = Bitmap.Config.RGB_565
                             return BitmapFactory.decodeByteArray(data, 0, data.size, options)
@@ -115,10 +115,10 @@ object ComicUtils {
                 ZipInputStream(BufferedInputStream(inputStream)).use { zipInputStream ->
                     var entry = zipInputStream.nextEntry
                     while (entry != null) {
-                        if (!entry.isDirectory && 
-                            !entry.name.contains("__MACOSX", ignoreCase = true) && 
+                        if (!entry.isDirectory &&
+                            !entry.name.contains("__MACOSX", ignoreCase = true) &&
                             isImageFile(entry.name)) {
-                            
+
                             val outputStream = ByteArrayOutputStream()
                             val buffer = ByteArray(32768)
                             var len: Int
@@ -126,7 +126,7 @@ object ComicUtils {
                                 outputStream.write(buffer, 0, len)
                             }
                             val data = outputStream.toByteArray()
-                            
+
                             val options = BitmapFactory.Options()
                             options.inSampleSize = 4
                             options.inPreferredConfig = Bitmap.Config.RGB_565

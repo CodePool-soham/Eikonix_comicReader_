@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -21,15 +22,19 @@ import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items as lazyItems
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.LibraryBooks
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
@@ -48,6 +53,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
@@ -151,6 +158,27 @@ fun LibraryScreen(onComicClick: (Uri) -> Unit) {
         mutableStateOf(prefs.getString("reading_mode", "horizontal") ?: "horizontal") 
     }
 
+    var viewMode by remember { mutableStateOf(LibraryViewMode.ALL_COMICS) }
+    var selectedGroupTitle by remember { mutableStateOf<String?>(null) }
+
+    /**
+     * Extracts the base title from a comic name.
+     */
+    fun getBaseTitle(name: String): String {
+        val nameWithoutExt = name.substringBeforeLast('.')
+        val regex = Regex("""\s*(#\s*\d+|(?<=\s)\d+|v\d+|vol\d+|volume\d+).*$""", RegexOption.IGNORE_CASE)
+        val baseTitle = nameWithoutExt.replace(regex, "").trim()
+        return if (baseTitle.isEmpty()) nameWithoutExt else baseTitle
+    }
+
+    val groupedComics = remember(comics) {
+        comics.groupBy { getBaseTitle(it.name) }
+            .map { (title, groupComics) ->
+                ComicGroup(title, groupComics.sortedWith(compareBy(NaturalOrderComparator()) { it.name }))
+            }
+            .sortedBy { it.title }
+    }
+
     /**
      * Updates the library list based on the provided set of [Uri] strings.
      */
@@ -160,7 +188,7 @@ fun LibraryScreen(onComicClick: (Uri) -> Unit) {
             val comicList = withContext(Dispatchers.IO) {
                 uris.map { uriString ->
                     val uri = Uri.parse(uriString)
-                    val name = DocumentFile.fromSingleUri(context, uri)?.name 
+                    val name = DocumentFile.fromSingleUri(context, uri)?.name
                                ?: uri.lastPathSegment ?: "Unknown"
                     Comic(uri = uri, name = name)
                 }.sortedWith(compareBy(NaturalOrderComparator()) { it.name })
@@ -183,6 +211,7 @@ fun LibraryScreen(onComicClick: (Uri) -> Unit) {
             comics
         } else {
             comics.filter { it.name.contains(searchQuery, ignoreCase = true) }
+                .sortedBy { it.name.indexOf(searchQuery, ignoreCase = true) }
         }
     }
 
@@ -198,7 +227,7 @@ fun LibraryScreen(onComicClick: (Uri) -> Unit) {
                                 Intent.FLAG_GRANT_READ_URI_PERMISSION
                             )
                         } catch (e: Exception) {}
-                        
+
                         val pickedDir = DocumentFile.fromTreeUri(context, treeUri)
                         val foundUris = mutableListOf<String>()
                         pickedDir?.listFiles()?.forEach { file ->
@@ -207,7 +236,7 @@ fun LibraryScreen(onComicClick: (Uri) -> Unit) {
                                 foundUris.add(file.uri.toString())
                             }
                         }
-                        
+
                         if (foundUris.isNotEmpty()) {
                             val currentUris = prefs.getStringSet("comic_uris", emptySet())?.toMutableSet() ?: mutableSetOf()
                             currentUris.addAll(foundUris)
@@ -270,6 +299,10 @@ fun LibraryScreen(onComicClick: (Uri) -> Unit) {
         )
     }
 
+    BackHandler(enabled = selectedGroupTitle != null) {
+        selectedGroupTitle = null
+    }
+
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -281,6 +314,29 @@ fun LibraryScreen(onComicClick: (Uri) -> Unit) {
                     style = MaterialTheme.typography.headlineSmall
                 )
                 HorizontalDivider()
+                NavigationDrawerItem(
+                    label = { Text("All Comics") },
+                    selected = viewMode == LibraryViewMode.ALL_COMICS && selectedGroupTitle == null,
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        viewMode = LibraryViewMode.ALL_COMICS
+                        selectedGroupTitle = null
+                    },
+                    icon = { Icon(Icons.AutoMirrored.Filled.LibraryBooks, contentDescription = null) },
+                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                )
+                NavigationDrawerItem(
+                    label = { Text("Series") },
+                    selected = viewMode == LibraryViewMode.SERIES && selectedGroupTitle == null,
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        viewMode = LibraryViewMode.SERIES
+                        selectedGroupTitle = null
+                    },
+                    icon = { Icon(Icons.Default.Collections, contentDescription = null) },
+                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                )
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 NavigationDrawerItem(
                     label = { Text("Settings") },
                     selected = false,
@@ -307,25 +363,57 @@ fun LibraryScreen(onComicClick: (Uri) -> Unit) {
                         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                         trailingIcon = {
                             IconButton(onClick = { 
-                                if (searchQuery.isNotEmpty()) searchQuery = "" else isSearching = false 
+                                if (searchQuery.isNotEmpty()) searchQuery = "" else isSearching = false
                             }) {
                                 Icon(Icons.Default.Close, contentDescription = null)
                             }
                         },
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
-                    ) {}
+                    ) {
+                        if (searchQuery.isNotEmpty()) {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                lazyItems(filteredComics.take(10)) { comic ->
+                                    ListItem(
+                                        headlineContent = { 
+                                            Text(
+                                                comic.name,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        },
+                                        leadingContent = { Icon(Icons.Default.Search, contentDescription = null) },
+                                        modifier = Modifier.clickable {
+                                            searchQuery = comic.name
+                                            isSearching = false
+                                            onComicClick(comic.uri)
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
                 } else {
                     CenterAlignedTopAppBar(
                         title = { 
                             Text(
-                                "COMIC VAULT", 
+                                if (selectedGroupTitle != null) selectedGroupTitle!! else if (viewMode == LibraryViewMode.SERIES) "SERIES" else "COMIC VAULT", 
                                 style = MaterialTheme.typography.headlineMedium,
-                                color = MaterialTheme.colorScheme.primary
+                                color = MaterialTheme.colorScheme.primary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             ) 
                         },
                         navigationIcon = {
-                            IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                                Icon(Icons.Default.Menu, contentDescription = "Menu")
+                            if (selectedGroupTitle != null) {
+                                IconButton(onClick = { selectedGroupTitle = null }) {
+                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                                }
+                            } else {
+                                IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                                    Icon(Icons.Default.Menu, contentDescription = "Menu")
+                                }
                             }
                         },
                         actions = {
@@ -358,18 +446,63 @@ fun LibraryScreen(onComicClick: (Uri) -> Unit) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Text("Add a folder containing .cbz files", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
                     }
-                } else if (filteredComics.isEmpty()) {
-                    Text("No comics match your search", color = Color.Gray, modifier = Modifier.align(Alignment.Center))
                 } else {
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(150.dp),
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(items = filteredComics, key = { it.uri.toString() }) { comic ->
-                            ComicItem(comic = comic, onClick = { onComicClick(comic.uri) })
+                    if (viewMode == LibraryViewMode.ALL_COMICS) {
+                        if (filteredComics.isEmpty()) {
+                            Text("No comics match your search", color = Color.Gray, modifier = Modifier.align(Alignment.Center))
+                        } else {
+                            LazyVerticalGrid(
+                                columns = GridCells.Adaptive(150.dp),
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(12.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(items = filteredComics, key = { it.uri.toString() }) { comic ->
+                                    ComicItem(comic = comic, onClick = { onComicClick(comic.uri) })
+                                }
+                            }
+                        }
+                    } else { // SERIES view mode
+                        if (selectedGroupTitle == null) {
+                            val filteredGroups = groupedComics.filter { it.title.contains(searchQuery, ignoreCase = true) }
+                                .sortedBy { it.title.indexOf(searchQuery, ignoreCase = true) }
+                            if (filteredGroups.isEmpty()) {
+                                Text("No series match your search", color = Color.Gray, modifier = Modifier.align(Alignment.Center))
+                            } else {
+                                LazyVerticalGrid(
+                                    columns = GridCells.Adaptive(150.dp),
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentPadding = PaddingValues(12.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    items(items = filteredGroups, key = { it.title }) { group ->
+                                        SeriesItem(group = group, onClick = { selectedGroupTitle = group.title })
+                                    }
+                                }
+                            }
+                        } else {
+                            val group = groupedComics.find { it.title == selectedGroupTitle }
+                            val list = group?.comics ?: emptyList()
+                            val filteredInGroup = if (searchQuery.isEmpty()) list else list.filter { it.name.contains(searchQuery, ignoreCase = true) }
+                                .sortedBy { it.name.indexOf(searchQuery, ignoreCase = true) }
+
+                            if (filteredInGroup.isEmpty()) {
+                                Text("No comics match your search in this series", color = Color.Gray, modifier = Modifier.align(Alignment.Center))
+                            } else {
+                                LazyVerticalGrid(
+                                    columns = GridCells.Adaptive(150.dp),
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentPadding = PaddingValues(12.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    items(items = filteredInGroup, key = { it.uri.toString() }) { comic ->
+                                        ComicItem(comic = comic, onClick = { onComicClick(comic.uri) })
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -434,8 +567,85 @@ fun ComicItem(comic: Comic, onClick: () -> Unit) {
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            
+
             Box(modifier = Modifier.fillMaxWidth().height(3.dp).background(MaterialTheme.colorScheme.primary).align(Alignment.TopCenter))
+        }
+    }
+}
+
+/**
+ * Composable for displaying a series (group of comics) in the library grid.
+ */
+@Composable
+fun SeriesItem(group: ComicGroup, onClick: () -> Unit) {
+    val context = LocalContext.current
+    var thumbnail by remember { mutableStateOf<Bitmap?>(null) }
+    
+    LaunchedEffect(group.comics.firstOrNull()?.uri) {
+        group.comics.firstOrNull()?.let { firstComic ->
+            withContext(Dispatchers.IO) {
+                thumbnail = ComicUtils.getThumbnail(context, firstComic.uri)
+            }
+        }
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(0.7f)
+            .clickable(onClick = onClick),
+        shape = MaterialTheme.shapes.medium,
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (thumbnail != null) {
+                Image(
+                    bitmap = thumbnail!!.asImageBitmap(),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                    alpha = 0.8f
+                )
+            }
+
+            // Stack effect simulation
+            Box(modifier = Modifier.fillMaxSize().padding(4.dp).background(Color.White.copy(alpha = 0.1f), MaterialTheme.shapes.medium))
+            
+            Column(
+                modifier = Modifier.fillMaxSize().padding(8.dp),
+                verticalArrangement = Arrangement.Bottom,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Surface(
+                    color = MaterialTheme.colorScheme.primary,
+                    shape = MaterialTheme.shapes.extraSmall,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                ) {
+                    Text(
+                        text = "${group.comics.size} ISSUES",
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                    )
+                }
+                
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Color.Black.copy(alpha = 0.7f),
+                    shape = MaterialTheme.shapes.small
+                ) {
+                    Text(
+                        text = group.title,
+                        color = Color.White,
+                        modifier = Modifier.padding(4.dp),
+                        style = MaterialTheme.typography.titleSmall,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
         }
     }
 }
@@ -508,11 +718,11 @@ fun ZoomableImage(
                             if (pointersCount >= 2) {
                                 val zoom = event.calculateZoom()
                                 val pan = event.calculatePan()
-                                
+
                                 val newScale = (scale * zoom).coerceIn(1f, 5f)
                                 scale = newScale
                                 onZoomChanged(scale > 1f)
-                                
+
                                 offset = Offset(
                                     x = (offset.x + pan.x).coerceIn(-maxOffsetX, maxOffsetX),
                                     y = (offset.y + pan.y).coerceIn(-maxOffsetY, maxOffsetY)
@@ -521,17 +731,17 @@ fun ZoomableImage(
                             } else if (pointersCount == 1 && scale > 1f) {
                                 val pan = event.calculatePan()
                                 val oldOffset = offset
-                                
+
                                 offset = Offset(
                                     x = (offset.x + pan.x).coerceIn(-maxOffsetX, maxOffsetX),
                                     y = (offset.y + pan.y).coerceIn(-maxOffsetY, maxOffsetY)
                                 )
-                                
+
                                 val consumed = if (readingMode == "horizontal") {
                                     if (abs(pan.y) > abs(pan.x)) {
                                         true
                                     } else {
-                                        val reachedEdgeX = (pan.x > 0 && oldOffset.x >= maxOffsetX) || 
+                                        val reachedEdgeX = (pan.x > 0 && oldOffset.x >= maxOffsetX) ||
                                                            (pan.x < 0 && oldOffset.x <= -maxOffsetX)
                                         !reachedEdgeX
                                     }
@@ -539,12 +749,12 @@ fun ZoomableImage(
                                     if (abs(pan.x) > abs(pan.y)) {
                                         true
                                     } else {
-                                        val reachedEdgeY = (pan.y > 0 && oldOffset.y >= maxOffsetY) || 
+                                        val reachedEdgeY = (pan.y > 0 && oldOffset.y >= maxOffsetY) ||
                                                            (pan.y < 0 && oldOffset.y <= -maxOffsetY)
                                         !reachedEdgeY
                                     }
                                 }
-                                
+
                                 if (consumed) {
                                     event.changes.forEach { it.consume() }
                                 }
@@ -605,7 +815,7 @@ fun ReaderScreen(uri: Uri, onBack: () -> Unit) {
     
     val prefs = remember { context.getSharedPreferences("comics_prefs", Context.MODE_PRIVATE) }
     val readingMode = remember { prefs.getString("reading_mode", "horizontal") ?: "horizontal" }
-    
+
     val fileName = remember(uri) {
         try {
             DocumentFile.fromSingleUri(context, uri)?.name ?: uri.lastPathSegment ?: "Reading"
@@ -639,7 +849,7 @@ fun ReaderScreen(uri: Uri, onBack: () -> Unit) {
                 }
             } else {
                 val pagerState = rememberPagerState(pageCount = { pages.size })
-                
+
                 if (readingMode == "horizontal") {
                     HorizontalPager(
                         state = pagerState,
@@ -688,14 +898,14 @@ fun ReaderScreen(uri: Uri, onBack: () -> Unit) {
                     modifier = Modifier.align(Alignment.TopCenter)
                 ) {
                     TopAppBar(
-                        title = { 
+                        title = {
                             Text(
-                                fileName, 
-                                maxLines = 1, 
+                                fileName,
+                                maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 color = Color.White,
                                 style = MaterialTheme.typography.titleMedium
-                            ) 
+                            )
                         },
                         navigationIcon = {
                             IconButton(onClick = onBack) {
