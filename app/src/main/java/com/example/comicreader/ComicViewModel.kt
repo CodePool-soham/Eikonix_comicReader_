@@ -5,6 +5,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
 import android.util.Log
+import android.util.LruCache
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
@@ -16,10 +17,7 @@ import java.io.File
 
 /**
  * ViewModel for managing the state and logic related to a comic.
- *
- * This ViewModel handles loading comic pages and retrieving bitmaps for specific pages.
- *
- * @param application The [Application] context.
+ * Optimized for performance and memory usage.
  */
 class ComicViewModel(application: Application) : AndroidViewModel(application) {
     private val TAG = "ComicViewModel"
@@ -27,53 +25,44 @@ class ComicViewModel(application: Application) : AndroidViewModel(application) {
     private val completedPrefs = application.getSharedPreferences("comic_completed", Context.MODE_PRIVATE)
 
     private val _currentComicPages = MutableStateFlow<List<String>>(emptyList())
-    /**
-     * A [StateFlow] emitting the list of entry names for the current comic's pages.
-     */
     val currentComicPages: StateFlow<List<String>> = _currentComicPages
 
     private val _isLoading = MutableStateFlow(false)
-    /**
-     * A [StateFlow] emitting the loading state of the comic.
-     */
     val isLoading: StateFlow<Boolean> = _isLoading
 
     private val _currentUri = MutableStateFlow<Uri?>(null)
-    /**
-     * A [StateFlow] emitting the [Uri] of the currently loaded comic.
-     */
     val currentUri: StateFlow<Uri?> = _currentUri
 
-    private var cachedCbrFile: File? = null
-    private var cachedCbrUri: Uri? = null
+    private var cachedComicFile: File? = null
+    private var cachedUri: Uri? = null
 
-    /**
-     * Loads the comic from the given [Uri].
-     *
-     * This function updates [isLoading] and [currentComicPages] state flows.
-     *
-     * @param uri The [Uri] of the comic file to load.
-     */
+    // Simple LruCache for bitmaps to reduce CPU usage when flipping pages
+    private val bitmapCache = object : LruCache<String, Bitmap>(3) {
+        override fun entryRemoved(evicted: Boolean, key: String?, oldValue: Bitmap?, newValue: Bitmap?) {
+            // No explicit recycle here as Compose might still be using it during transition
+        }
+    }
+
     fun loadComic(uri: Uri) {
+        if (cachedUri == uri && _currentComicPages.value.isNotEmpty()) return
+
         viewModelScope.launch {
             _isLoading.value = true
             _currentUri.value = uri
             
             val pages = withContext(Dispatchers.IO) {
                 try {
-                    val fileName = ComicUtils.getFileName(getApplication(), uri) ?: ""
-                    if (fileName.lowercase().endsWith(".cbr")) {
-                        // For CBR, we cache the temp file to avoid repeated copies
-                        if (cachedCbrUri != uri || cachedCbrFile == null || !cachedCbrFile!!.exists()) {
-                            clearCachedCbr()
-                            val tempFile = File(getApplication<Application>().cacheDir, "comic_${System.currentTimeMillis()}.cbr")
-                            ComicUtils.copyUriToFile(getApplication(), uri, tempFile)
-                            cachedCbrFile = tempFile
-                            cachedCbrUri = uri
+                    ensureFileCached(uri)
+                    val file = cachedComicFile
+                    if (file != null && file.exists()) {
+                        val name = file.name.lowercase()
+                        if (name.endsWith(".cbr") || name.endsWith(".rar")) {
+                            ComicUtils.getPagesFromCbr(file)
+                        } else {
+                            ComicUtils.getPagesFromZip(file)
                         }
-                        ComicUtils.getPagesFromCbr(cachedCbrFile!!)
                     } else {
-                        ComicUtils.getPagesFromCbz(getApplication(), uri)
+                        emptyList()
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error loading comic pages", e)
@@ -85,31 +74,42 @@ class ComicViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /**
-     * Retrieves the [Bitmap] for a specific page in the comic.
-     *
-     * @param uri The [Uri] of the comic file.
-     * @param entryName The name of the file entry for the page within the archive.
-     * @return The [Bitmap] of the page, or null if it could not be retrieved.
-     */
-    suspend fun getPageBitmap(uri: Uri, entryName: String): Bitmap? {
+    private fun ensureFileCached(uri: Uri) {
+        if (cachedUri != uri || cachedComicFile == null || !cachedComicFile!!.exists()) {
+            clearCache()
+            val fileName = ComicUtils.getFileName(getApplication(), uri) ?: "temp.cbz"
+            val suffix = if (fileName.lowercase().endsWith(".cbr")) ".cbr" else ".cbz"
+            val tempFile = File(getApplication<Application>().cacheDir, "current_comic$suffix")
+            try {
+                ComicUtils.copyUriToFile(getApplication(), uri, tempFile)
+                cachedComicFile = tempFile
+                cachedUri = uri
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to cache comic file", e)
+            }
+        }
+    }
+
+    suspend fun getPageBitmap(uri: Uri, entryName: String, reqWidth: Int = 0, reqHeight: Int = 0): Bitmap? {
+        val cacheKey = "${uri}_${entryName}_${reqWidth}x${reqHeight}"
+        bitmapCache.get(cacheKey)?.let { return it }
+
         return withContext(Dispatchers.IO) {
             try {
-                val fileName = ComicUtils.getFileName(getApplication(), uri) ?: ""
-                if (fileName.lowercase().endsWith(".cbr")) {
-                    if (cachedCbrUri == uri && cachedCbrFile != null && cachedCbrFile!!.exists()) {
-                        ComicUtils.getPageBitmapFromCbr(cachedCbrFile!!, entryName)
+                ensureFileCached(uri)
+                val file = cachedComicFile
+                if (file != null && file.exists()) {
+                    val name = file.name.lowercase()
+                    val bitmap = if (name.endsWith(".cbr") || name.endsWith(".rar")) {
+                        ComicUtils.getPageBitmapFromCbr(file, entryName, reqWidth, reqHeight)
                     } else {
-                        // Fallback if not cached (should not happen in reader)
-                        val tempFile = File(getApplication<Application>().cacheDir, "page_${System.currentTimeMillis()}.cbr")
-                        ComicUtils.copyUriToFile(getApplication(), uri, tempFile)
-                        val bitmap = ComicUtils.getPageBitmapFromCbr(tempFile, entryName)
-                        tempFile.delete()
-                        bitmap
+                        ComicUtils.getPageBitmapFromZip(file, entryName, reqWidth, reqHeight)
                     }
-                } else {
-                    ComicUtils.getPageBitmapFromCbz(getApplication(), uri, entryName)
-                }
+                    if (bitmap != null) {
+                        bitmapCache.put(cacheKey, bitmap)
+                    }
+                    bitmap
+                } else null
             } catch (e: Exception) {
                 Log.e(TAG, "Error getting page bitmap", e)
                 null
@@ -117,51 +117,37 @@ class ComicViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun clearCachedCbr() {
-        cachedCbrFile?.delete()
-        cachedCbrFile = null
-        cachedCbrUri = null
+    private fun clearCache() {
+        cachedComicFile?.delete()
+        cachedComicFile = null
+        cachedUri = null
+        bitmapCache.evictAll()
     }
 
     override fun onCleared() {
         super.onCleared()
-        clearCachedCbr()
+        clearCache()
     }
 
-    /**
-     * Saves the last read page for a comic.
-     */
     fun saveLastReadPage(uri: Uri, page: Int, totalPages: Int) {
         progressPrefs.edit().putInt(uri.toString(), page).apply()
-        if (page == totalPages - 1 && totalPages > 0) {
+        if (page >= totalPages - 1 && totalPages > 0) {
             setCompleted(uri, true)
         }
     }
 
-    /**
-     * Gets the last read page for a comic.
-     */
     fun getLastReadPage(uri: Uri): Int {
         return progressPrefs.getInt(uri.toString(), 0)
     }
 
-    /**
-     * Marks a comic as completed or not.
-     */
     fun setCompleted(uri: Uri, completed: Boolean) {
         completedPrefs.edit().putBoolean(uri.toString(), completed).apply()
     }
 
-    /**
-     * Checks if a comic is completed.
-     */
     fun isCompleted(uri: Uri): Boolean {
         return completedPrefs.getBoolean(uri.toString(), false)
     }
 
-    /**
-     * Resets progress for a comic.
-     */
     fun resetProgress(uri: Uri) {
         progressPrefs.edit().remove(uri.toString()).apply()
         setCompleted(uri, false)

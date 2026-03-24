@@ -53,12 +53,12 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -66,7 +66,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import coil.compose.SubcomposeAsyncImage
+import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.comicreader.ui.theme.ComicReaderTheme
 import kotlinx.coroutines.Dispatchers
@@ -75,9 +75,6 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.math.abs
 
-/**
- * The main activity of the application, serving as the entry point.
- */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -86,7 +83,6 @@ class MainActivity : ComponentActivity() {
             ComicReaderTheme {
                 val navController = rememberNavController()
                 ComicApp(navController)
-                
                 LaunchedEffect(intent) {
                     handleIntent(intent, navController)
                 }
@@ -94,9 +90,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /**
-     * Handles incoming intents, specifically for viewing comic files.
-     */
     private fun handleIntent(intent: Intent?, navController: NavHostController) {
         if (intent?.action == Intent.ACTION_VIEW) {
             intent.data?.let { uri ->
@@ -107,9 +100,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/**
- * The main composable representing the application's navigation structure.
- */
 @Composable
 fun ComicApp(navController: NavHostController) {
     NavHost(navController = navController, startDestination = "library") {
@@ -127,18 +117,11 @@ fun ComicApp(navController: NavHostController) {
         ) { backStackEntry ->
             val comicUriStr = backStackEntry.arguments?.getString("comicUri") ?: ""
             val comicUri = Uri.parse(comicUriStr)
-            
-            ReaderScreen(
-                uri = comicUri,
-                onBack = { navController.popBackStack() }
-            )
+            ReaderScreen(uri = comicUri, onBack = { navController.popBackStack() })
         }
     }
 }
 
-/**
- * Composable screen for displaying the comic library.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryScreen(onComicClick: (Uri) -> Unit) {
@@ -158,9 +141,6 @@ fun LibraryScreen(onComicClick: (Uri) -> Unit) {
     var viewMode by remember { mutableStateOf(LibraryViewMode.ALL_COMICS) }
     var selectedGroupTitle by remember { mutableStateOf<String?>(null) }
 
-    /**
-     * Extracts the base title from a comic name.
-     */
     fun getBaseTitle(name: String): String {
         val nameWithoutExt = name.substringBeforeLast('.')
         val regex = Regex("""\s*(#\s*\d+|(?<=\s)\d+|v\d+|vol\d+|volume\d+).*$""", RegexOption.IGNORE_CASE)
@@ -176,10 +156,6 @@ fun LibraryScreen(onComicClick: (Uri) -> Unit) {
             .sortedBy { it.title }
     }
 
-    /**
-     * Updates the library list based on the provided set of [Uri] strings.
-     * Efficiently loads metadata only when needed.
-     */
     fun updateComics(uris: Set<String>) {
         scope.launch {
             isLoadingLibrary = true
@@ -212,7 +188,6 @@ fun LibraryScreen(onComicClick: (Uri) -> Unit) {
             comics
         } else {
             comics.filter { it.name.contains(searchQuery, ignoreCase = true) }
-                .sortedBy { it.name.indexOf(searchQuery, ignoreCase = true) }
         }
     }
 
@@ -238,7 +213,6 @@ fun LibraryScreen(onComicClick: (Uri) -> Unit) {
                             currentUris.addAll(foundItems.map { it.first.toString() })
                             prefs.edit().putStringSet("comic_uris", currentUris).apply()
                             
-                            // Immediately update comics list from the scan results to avoid redundant disk queries
                             val newComicList = currentUris.map { uriStr ->
                                 val u = Uri.parse(uriStr)
                                 val name = foundItems.find { it.first == u }?.second 
@@ -268,7 +242,6 @@ fun LibraryScreen(onComicClick: (Uri) -> Unit) {
             text = {
                 Column {
                     Text("Reading Direction", style = MaterialTheme.typography.titleMedium)
-                    Spacer(modifier = Modifier.height(8.dp))
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth().clickable {
@@ -276,14 +249,11 @@ fun LibraryScreen(onComicClick: (Uri) -> Unit) {
                             prefs.edit().putString("reading_mode", "horizontal").apply()
                         }
                     ) {
-                        RadioButton(
-                            selected = readingMode == "horizontal",
-                            onClick = { 
-                                readingMode = "horizontal"
-                                prefs.edit().putString("reading_mode", "horizontal").apply()
-                            }
-                        )
-                        Text("Horizontal Sliding")
+                        RadioButton(selected = readingMode == "horizontal", onClick = { 
+                            readingMode = "horizontal"
+                            prefs.edit().putString("reading_mode", "horizontal").apply()
+                        })
+                        Text("Horizontal")
                     }
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -292,16 +262,12 @@ fun LibraryScreen(onComicClick: (Uri) -> Unit) {
                             prefs.edit().putString("reading_mode", "vertical").apply()
                         }
                     ) {
-                        RadioButton(
-                            selected = readingMode == "vertical",
-                            onClick = { 
-                                readingMode = "vertical"
-                                prefs.edit().putString("reading_mode", "vertical").apply()
-                            }
-                        )
-                        Text("Vertical Swiping")
+                        RadioButton(selected = readingMode == "vertical", onClick = { 
+                            readingMode = "vertical"
+                            prefs.edit().putString("reading_mode", "vertical").apply()
+                        })
+                        Text("Vertical")
                     }
-                    
                     Spacer(modifier = Modifier.height(16.dp))
                     Button(
                         onClick = {
@@ -316,9 +282,7 @@ fun LibraryScreen(onComicClick: (Uri) -> Unit) {
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showSettingsDialog = false }) {
-                    Text("Close")
-                }
+                TextButton(onClick = { showSettingsDialog = false }) { Text("Close") }
             }
         )
     }
@@ -337,11 +301,7 @@ fun LibraryScreen(onComicClick: (Uri) -> Unit) {
         drawerContent = {
             ModalDrawerSheet {
                 Spacer(Modifier.height(12.dp))
-                Text(
-                    "Comic Reader",
-                    modifier = Modifier.padding(16.dp),
-                    style = MaterialTheme.typography.headlineSmall
-                )
+                Text("Comic Reader", modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.headlineSmall)
                 HorizontalDivider()
                 NavigationDrawerItem(
                     label = { Text("All Comics") },
@@ -387,60 +347,37 @@ fun LibraryScreen(onComicClick: (Uri) -> Unit) {
                         onQueryChange = { searchQuery = it },
                         onSearch = { isSearching = false },
                         active = true,
-                        onActiveChange = { 
-                            if (!it) {
-                                isSearching = false
-                                searchQuery = ""
-                            }
-                        },
-                        placeholder = { Text("Search your comics...", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)) },
+                        onActiveChange = { if (!it) { isSearching = false; searchQuery = "" } },
+                        placeholder = { Text("Search...") },
                         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                         trailingIcon = {
-                            IconButton(onClick = { 
-                                if (searchQuery.isNotEmpty()) searchQuery = "" else isSearching = false
-                            }) {
+                            IconButton(onClick = { if (searchQuery.isNotEmpty()) searchQuery = "" else isSearching = false }) {
                                 Icon(Icons.Default.Close, contentDescription = null)
                             }
                         },
-                        colors = SearchBarDefaults.colors(
-                            containerColor = Color.Transparent,
-                        ),
+                        colors = SearchBarDefaults.colors(containerColor = Color.Transparent),
                         tonalElevation = 0.dp,
-                        shadowElevation = 0.dp,
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
                     ) {
-                        Surface(
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(150.dp),
                             modifier = Modifier.fillMaxSize(),
-                            color = MaterialTheme.colorScheme.background.copy(alpha = 0.9f)
+                            contentPadding = PaddingValues(16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            LazyVerticalGrid(
-                                columns = GridCells.Adaptive(150.dp),
-                                modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(16.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                items(items = filteredComics, key = { it.uri.toString() }) { comic ->
-                                    ComicItem(comic = comic, onClick = {
-                                        isSearching = false
-                                        searchQuery = ""
-                                        onComicClick(comic.uri)
-                                    })
-                                }
+                            items(items = filteredComics, key = { it.uri.toString() }) { comic ->
+                                ComicItem(comic = comic, onClick = {
+                                    isSearching = false
+                                    searchQuery = ""
+                                    onComicClick(comic.uri)
+                                })
                             }
                         }
                     }
                 } else {
                     CenterAlignedTopAppBar(
-                        title = { 
-                            Text(
-                                if (selectedGroupTitle != null) selectedGroupTitle!! else if (viewMode == LibraryViewMode.SERIES) "SERIES" else "COMIC VAULT", 
-                                style = MaterialTheme.typography.headlineMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            ) 
-                        },
+                        title = { Text(selectedGroupTitle ?: if (viewMode == LibraryViewMode.SERIES) "SERIES" else "COMICS") },
                         navigationIcon = {
                             if (selectedGroupTitle != null) {
                                 IconButton(onClick = { selectedGroupTitle = null }) {
@@ -456,19 +393,12 @@ fun LibraryScreen(onComicClick: (Uri) -> Unit) {
                             IconButton(onClick = { isSearching = true }) {
                                 Icon(Icons.Default.Search, contentDescription = "Search")
                             }
-                        },
-                        colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.background
-                        )
+                        }
                     )
                 }
             },
             floatingActionButton = {
-                FloatingActionButton(
-                    onClick = { folderLauncher.launch(null) },
-                    containerColor = MaterialTheme.colorScheme.secondary,
-                    contentColor = Color.White
-                ) {
+                FloatingActionButton(onClick = { folderLauncher.launch(null) }) {
                     Icon(Icons.Default.CreateNewFolder, contentDescription = "Add Folder")
                 }
             }
@@ -477,67 +407,36 @@ fun LibraryScreen(onComicClick: (Uri) -> Unit) {
                 if (isLoadingLibrary) {
                     CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                 } else if (comics.isEmpty()) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.align(Alignment.Center).padding(32.dp)) {
-                        Text("Your library is empty", style = MaterialTheme.typography.headlineSmall)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("Add a folder containing .cbz or .cbr files", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
-                    }
+                    Text("Library is empty. Add a folder.", modifier = Modifier.align(Alignment.Center))
                 } else {
-                    if (viewMode == LibraryViewMode.ALL_COMICS) {
-                        if (filteredComics.isEmpty()) {
-                            Text("No comics match your search", color = Color.Gray, modifier = Modifier.align(Alignment.Center))
-                        } else {
-                            LazyVerticalGrid(
-                                columns = GridCells.Adaptive(150.dp),
-                                modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(12.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                items(items = filteredComics, key = { it.uri.toString() }) { comic ->
-                                    ComicItem(comic = comic, onClick = { onComicClick(comic.uri) })
-                                }
+                    val displayComics = if (viewMode == LibraryViewMode.ALL_COMICS) {
+                        filteredComics
+                    } else if (selectedGroupTitle != null) {
+                        groupedComics.find { it.title == selectedGroupTitle }?.comics ?: emptyList()
+                    } else null
+
+                    if (displayComics != null) {
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(150.dp),
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(items = displayComics, key = { it.uri.toString() }) { comic ->
+                                ComicItem(comic = comic, onClick = { onComicClick(comic.uri) })
                             }
                         }
-                    } else { // SERIES view mode
-                        if (selectedGroupTitle == null) {
-                            val filteredGroups = groupedComics.filter { it.title.contains(searchQuery, ignoreCase = true) }
-                                .sortedBy { it.title.indexOf(searchQuery, ignoreCase = true) }
-                            if (filteredGroups.isEmpty()) {
-                                Text("No series match your search", color = Color.Gray, modifier = Modifier.align(Alignment.Center))
-                            } else {
-                                LazyVerticalGrid(
-                                    columns = GridCells.Adaptive(150.dp),
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentPadding = PaddingValues(12.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    items(items = filteredGroups, key = { it.title }) { group ->
-                                        SeriesItem(group = group, onClick = { selectedGroupTitle = group.title })
-                                    }
-                                }
-                            }
-                        } else {
-                            val group = groupedComics.find { it.title == selectedGroupTitle }
-                            val list = group?.comics ?: emptyList()
-                            val filteredInGroup = if (searchQuery.isEmpty()) list else list.filter { it.name.contains(searchQuery, ignoreCase = true) }
-                                .sortedBy { it.name.indexOf(searchQuery, ignoreCase = true) }
-
-                            if (filteredInGroup.isEmpty()) {
-                                Text("No comics match your search in this series", color = Color.Gray, modifier = Modifier.align(Alignment.Center))
-                            } else {
-                                LazyVerticalGrid(
-                                    columns = GridCells.Adaptive(150.dp),
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentPadding = PaddingValues(12.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    items(items = filteredInGroup, key = { it.uri.toString() }) { comic ->
-                                        ComicItem(comic = comic, onClick = { onComicClick(comic.uri) })
-                                    }
-                                }
+                    } else {
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(150.dp),
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(items = groupedComics, key = { it.title }) { group ->
+                                SeriesItem(group = group, onClick = { selectedGroupTitle = group.title })
                             }
                         }
                     }
@@ -547,9 +446,6 @@ fun LibraryScreen(onComicClick: (Uri) -> Unit) {
     }
 }
 
-/**
- * Composable for displaying a single comic item in the library grid.
- */
 @Composable
 fun ComicItem(comic: Comic, onClick: () -> Unit) {
     val context = LocalContext.current
@@ -564,76 +460,34 @@ fun ComicItem(comic: Comic, onClick: () -> Unit) {
     }
 
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(0.7f)
-            .clickable(onClick = onClick),
-        shape = MaterialTheme.shapes.medium,
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        modifier = Modifier.fillMaxWidth().aspectRatio(0.7f).clickable(onClick = onClick),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            SubcomposeAsyncImage(
+            AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
                     .data(thumbnailFile)
                     .crossfade(true)
                     .build(),
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-                loading = {
-                    Box(
-                        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                    }
-                },
-                error = {
-                    Box(
-                        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Collections, contentDescription = null, tint = Color.Gray)
-                    }
-                }
+                contentScale = ContentScale.Crop
             )
             
             if (isCompleted) {
                 Icon(
-                    imageVector = Icons.Default.CheckCircle,
-                    contentDescription = "Completed",
-                    tint = Color.Green,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(8.dp)
-                        .size(24.dp)
-                        .background(Color.Black.copy(alpha = 0.5f), shape = MaterialTheme.shapes.small)
+                    Icons.Default.CheckCircle, null, tint = Color.Green,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(20.dp).background(Color.Black.copy(0.4f), RectangleShape)
                 )
             }
 
-            Surface(
-                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
-                color = Color.Black.copy(alpha = 0.7f)
-            ) {
-                Text(
-                    text = comic.name,
-                    color = Color.White,
-                    modifier = Modifier.padding(6.dp),
-                    style = MaterialTheme.typography.labelSmall,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
+            Surface(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(), color = Color.Black.copy(alpha = 0.6f)) {
+                Text(comic.name, color = Color.White, modifier = Modifier.padding(4.dp), style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-
-            Box(modifier = Modifier.fillMaxWidth().height(3.dp).background(MaterialTheme.colorScheme.primary).align(Alignment.TopCenter))
         }
     }
 }
 
-/**
- * Composable for displaying a series (group of comics) in the library grid.
- */
 @Composable
 fun SeriesItem(group: ComicGroup, onClick: () -> Unit) {
     val context = LocalContext.current
@@ -648,16 +502,11 @@ fun SeriesItem(group: ComicGroup, onClick: () -> Unit) {
     }
 
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(0.7f)
-            .clickable(onClick = onClick),
-        shape = MaterialTheme.shapes.medium,
-        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+        modifier = Modifier.fillMaxWidth().aspectRatio(0.7f).clickable(onClick = onClick),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            SubcomposeAsyncImage(
+            AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
                     .data(thumbnailFile)
                     .crossfade(true)
@@ -665,69 +514,18 @@ fun SeriesItem(group: ComicGroup, onClick: () -> Unit) {
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
-                alpha = 0.8f,
-                loading = {
-                    Box(
-                        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                    }
-                },
-                error = {
-                    Box(
-                        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Collections, contentDescription = null, tint = Color.Gray)
-                    }
-                }
+                alpha = 0.8f
             )
-
-            // Stack effect simulation
-            Box(modifier = Modifier.fillMaxSize().padding(4.dp).background(Color.White.copy(alpha = 0.1f), MaterialTheme.shapes.medium))
-            
-            Column(
-                modifier = Modifier.fillMaxSize().padding(8.dp),
-                verticalArrangement = Arrangement.Bottom,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Surface(
-                    color = MaterialTheme.colorScheme.primary,
-                    shape = MaterialTheme.shapes.extraSmall,
-                    modifier = Modifier.padding(bottom = 4.dp)
-                ) {
-                    Text(
-                        text = "${group.comics.size} ISSUES",
-                        color = Color.White,
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                    )
-                }
-                
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = Color.Black.copy(alpha = 0.7f),
-                    shape = MaterialTheme.shapes.small
-                ) {
-                    Text(
-                        text = group.title,
-                        color = Color.White,
-                        modifier = Modifier.padding(4.dp),
-                        style = MaterialTheme.typography.titleSmall,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Center
-                    )
+            Surface(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(), color = Color.Black.copy(alpha = 0.7f)) {
+                Column(modifier = Modifier.padding(4.dp)) {
+                    Text(group.title, color = Color.White, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("${group.comics.size} issues", color = Color.LightGray, style = MaterialTheme.typography.labelSmall)
                 }
             }
         }
     }
 }
 
-/**
- * A zoomable and pannable image composable for viewing comic pages.
- */
 @Composable
 fun ZoomableImage(
     bitmap: Bitmap,
@@ -740,9 +538,7 @@ fun ZoomableImage(
 ) {
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
-    val configuration = LocalConfiguration.current
 
-    // Reset zoom when page changes
     LaunchedEffect(currentPage) {
         if (currentPage != pageIndex) {
             scale = 1f
@@ -751,45 +547,30 @@ fun ZoomableImage(
         }
     }
 
-    // Reset zoom on rotation
-    LaunchedEffect(configuration.orientation) {
-        scale = 1f
-        offset = Offset.Zero
-        onZoomChanged(false)
-    }
-
     BoxWithConstraints(modifier = modifier) {
         val screenWidth = constraints.maxWidth.toFloat()
         val screenHeight = constraints.maxHeight.toFloat()
-        
         val imageWidth = bitmap.width.toFloat()
         val imageHeight = bitmap.height.toFloat()
-        
         val scaleFit = minOf(screenWidth / imageWidth, screenHeight / imageHeight)
         val actualImageWidth = imageWidth * scaleFit
         val actualImageHeight = imageHeight * scaleFit
-        
         val maxOffsetX = maxOf(0f, (actualImageWidth * scale - screenWidth) / 2f)
         val maxOffsetY = maxOf(0f, (actualImageHeight * scale - screenHeight) / 2f)
 
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .clip(RectangleShape)
                 .pointerInput(scale, offset, readingMode) {
                     awaitPointerEventScope {
                         while (true) {
                             val event = awaitPointerEvent()
                             val pointersCount = event.changes.size
-                            
                             if (pointersCount >= 2) {
                                 val zoom = event.calculateZoom()
                                 val pan = event.calculatePan()
-
-                                val newScale = (scale * zoom).coerceIn(1f, 5f)
-                                scale = newScale
+                                scale = (scale * zoom).coerceIn(1f, 4f)
                                 onZoomChanged(scale > 1f)
-
                                 offset = Offset(
                                     x = (offset.x + pan.x).coerceIn(-maxOffsetX, maxOffsetX),
                                     y = (offset.y + pan.y).coerceIn(-maxOffsetY, maxOffsetY)
@@ -797,36 +578,18 @@ fun ZoomableImage(
                                 event.changes.forEach { it.consume() }
                             } else if (pointersCount == 1 && scale > 1f) {
                                 val pan = event.calculatePan()
-                                val oldOffset = offset
-
+                                val oldX = offset.x
+                                val oldY = offset.y
                                 offset = Offset(
                                     x = (offset.x + pan.x).coerceIn(-maxOffsetX, maxOffsetX),
                                     y = (offset.y + pan.y).coerceIn(-maxOffsetY, maxOffsetY)
                                 )
-
                                 val consumed = if (readingMode == "horizontal") {
-                                    if (abs(pan.y) > abs(pan.x)) {
-                                        true
-                                    } else {
-                                        val reachedEdgeX = (pan.x > 0 && oldOffset.x >= maxOffsetX) ||
-                                                           (pan.x < 0 && oldOffset.x <= -maxOffsetX)
-                                        !reachedEdgeX
-                                    }
+                                    abs(pan.y) > abs(pan.x) || (pan.x > 0 && oldX < maxOffsetX) || (pan.x < 0 && oldX > -maxOffsetX)
                                 } else {
-                                    if (abs(pan.x) > abs(pan.y)) {
-                                        true
-                                    } else {
-                                        val reachedEdgeY = (pan.y > 0 && oldOffset.y >= maxOffsetY) ||
-                                                           (pan.y < 0 && oldOffset.y <= -maxOffsetY)
-                                        !reachedEdgeY
-                                    }
+                                    abs(pan.x) > abs(pan.y) || (pan.y > 0 && oldY < maxOffsetY) || (pan.y < 0 && oldY > -maxOffsetY)
                                 }
-
-                                if (consumed) {
-                                    event.changes.forEach { it.consume() }
-                                }
-                            } else {
-                                onZoomChanged(scale > 1f)
+                                if (consumed) event.changes.forEach { it.consume() }
                             }
                         }
                     }
@@ -836,12 +599,9 @@ fun ZoomableImage(
                         onTap = { onToggleUI() },
                         onDoubleTap = {
                             if (scale > 1f) {
-                                scale = 1f
-                                offset = Offset.Zero
-                                onZoomChanged(false)
+                                scale = 1f; offset = Offset.Zero; onZoomChanged(false)
                             } else {
-                                scale = 2.5f
-                                onZoomChanged(true)
+                                scale = 2.5f; onZoomChanged(true)
                             }
                         }
                     )
@@ -850,23 +610,13 @@ fun ZoomableImage(
             Image(
                 bitmap = bitmap.asImageBitmap(),
                 contentDescription = null,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer(
-                        scaleX = scale,
-                        scaleY = scale,
-                        translationX = offset.x,
-                        translationY = offset.y
-                    ),
+                modifier = Modifier.fillMaxSize().graphicsLayer(scaleX = scale, scaleY = scale, translationX = offset.x, translationY = offset.y),
                 contentScale = ContentScale.Fit
             )
         }
     }
 }
 
-/**
- * Composable screen for reading a comic.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReaderScreen(uri: Uri, onBack: () -> Unit) {
@@ -877,279 +627,90 @@ fun ReaderScreen(uri: Uri, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
 
     var isZoomed by remember { mutableStateOf(false) }
-    var isUIVisible by remember { mutableStateOf(true) }
+    var isUIVisible by remember { mutableStateOf(false) }
     var showJumpDialog by remember { mutableStateOf(false) }
-    var showRestartDialog by remember { mutableStateOf(false) }
     var initialPageSet by remember { mutableStateOf(false) }
     
     val prefs = remember { context.getSharedPreferences("comics_prefs", Context.MODE_PRIVATE) }
     val readingMode = remember { prefs.getString("reading_mode", "horizontal") ?: "horizontal" }
 
-    val fileName = remember(uri) {
-        try {
-            ComicUtils.getFileName(context, uri) ?: "Reading"
-        } catch (e: Exception) {
-            uri.lastPathSegment ?: "Reading"
-        }
-    }
+    LaunchedEffect(uri) { viewModel.loadComic(uri) }
 
-    LaunchedEffect(uri) {
-        Log.d("ReaderScreen", "Loading comic: $uri")
-        viewModel.loadComic(uri)
-    }
+    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+        if (isLoading) {
+            CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+        } else if (pages.isNotEmpty()) {
+            val pagerState = rememberPagerState(initialPage = 0, pageCount = { pages.size })
+            val lastRead = remember(uri) { viewModel.getLastReadPage(uri) }
 
-    Scaffold(
-        containerColor = Color.Black
-    ) { padding ->
-        val unused = padding // Suppress warning
-        Box(modifier = Modifier.fillMaxSize()) {
-            if (isLoading) {
-                CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-            } else if (pages.isEmpty()) {
-                Column(
-                    modifier = Modifier.align(Alignment.Center),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text("No pages found in comic.", color = Color.White)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Button(onClick = { viewModel.loadComic(uri) }) {
-                        Text("Retry")
-                    }
+            LaunchedEffect(pages) {
+                if (!initialPageSet) {
+                    if (lastRead > 0) pagerState.scrollToPage(lastRead)
+                    initialPageSet = true
+                }
+            }
+
+            LaunchedEffect(pagerState.currentPage) {
+                if (initialPageSet) viewModel.saveLastReadPage(uri, pagerState.currentPage, pages.size)
+            }
+
+            if (readingMode == "horizontal") {
+                HorizontalPager(state = pagerState, beyondViewportPageCount = 1, userScrollEnabled = !isZoomed) { pageIndex ->
+                    ReaderPage(uri, pages[pageIndex], viewModel, pagerState.currentPage, pageIndex, readingMode, { isZoomed = it }, { isUIVisible = !isUIVisible })
                 }
             } else {
-                val lastRead = remember(uri) { viewModel.getLastReadPage(uri) }
-                val isCompleted = remember(uri) { viewModel.isCompleted(uri) }
-                val pagerState = rememberPagerState(initialPage = 0, pageCount = { pages.size })
+                VerticalPager(state = pagerState, beyondViewportPageCount = 1, userScrollEnabled = !isZoomed) { pageIndex ->
+                    ReaderPage(uri, pages[pageIndex], viewModel, pagerState.currentPage, pageIndex, readingMode, { isZoomed = it }, { isUIVisible = !isUIVisible })
+                }
+            }
+            
+            AnimatedVisibility(visible = isUIVisible, enter = slideInVertically { -it }, exit = slideOutVertically { -it }) {
+                TopAppBar(
+                    title = { Text(ComicUtils.getFileName(context, uri) ?: "", color = Color.White, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White) } },
+                    actions = { IconButton(onClick = { showJumpDialog = true }) { Icon(Icons.Default.Menu, null, tint = Color.White) } },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Black.copy(0.7f))
+                )
+            }
 
-                LaunchedEffect(pages) {
-                    if (pages.isNotEmpty() && !initialPageSet) {
-                        if (isCompleted) {
-                            showRestartDialog = true
-                        } else if (lastRead > 0) {
-                            pagerState.scrollToPage(lastRead)
-                        }
-                        initialPageSet = true
-                    }
+            AnimatedVisibility(visible = isUIVisible, enter = slideInVertically { it }, exit = slideOutVertically { it }, modifier = Modifier.align(Alignment.BottomCenter)) {
+                Surface(color = Color.Black.copy(0.7f), modifier = Modifier.fillMaxWidth()) {
+                    Text("${pagerState.currentPage + 1} / ${pages.size}", color = Color.White, modifier = Modifier.padding(16.dp), textAlign = TextAlign.Center)
                 }
+            }
 
-                LaunchedEffect(pagerState.currentPage) {
-                    if (initialPageSet) {
-                        viewModel.saveLastReadPage(uri, pagerState.currentPage, pages.size)
-                    }
-                }
-
-                if (readingMode == "horizontal") {
-                    HorizontalPager(
-                        state = pagerState,
-                        modifier = Modifier.fillMaxSize(),
-                        beyondViewportPageCount = 1,
-                        pageSpacing = 0.dp,
-                        userScrollEnabled = true
-                    ) { pageIndex ->
-                        ReaderPage(
-                            uri = uri,
-                            entryName = pages[pageIndex],
-                            viewModel = viewModel,
-                            currentPage = pagerState.currentPage,
-                            pageIndex = pageIndex,
-                            readingMode = readingMode,
-                            onZoomChanged = { isZoomed = it },
-                            onToggleUI = { isUIVisible = !isUIVisible }
-                        )
-                    }
-                } else {
-                    VerticalPager(
-                        state = pagerState,
-                        modifier = Modifier.fillMaxSize(),
-                        beyondViewportPageCount = 1,
-                        pageSpacing = 0.dp,
-                        userScrollEnabled = true
-                    ) { pageIndex ->
-                        ReaderPage(
-                            uri = uri,
-                            entryName = pages[pageIndex],
-                            viewModel = viewModel,
-                            currentPage = pagerState.currentPage,
-                            pageIndex = pageIndex,
-                            readingMode = readingMode,
-                            onZoomChanged = { isZoomed = it },
-                            onToggleUI = { isUIVisible = !isUIVisible }
-                        )
-                    }
-                }
-                
-                // Top Bar Overlay
-                AnimatedVisibility(
-                    visible = isUIVisible,
-                    enter = slideInVertically(initialOffsetY = { -it }),
-                    exit = slideOutVertically(targetOffsetY = { -it }),
-                    modifier = Modifier.align(Alignment.TopCenter)
-                ) {
-                    TopAppBar(
-                        title = {
-                            Text(
-                                fileName,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                color = Color.White,
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                        },
-                        navigationIcon = {
-                            IconButton(onClick = onBack) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
-                            }
-                        },
-                        actions = {
-                            IconButton(onClick = { showJumpDialog = true }) {
-                                Icon(Icons.Default.Menu, contentDescription = "Jump to page", tint = Color.White)
-                            }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = Color.Black.copy(alpha = 0.8f)
-                        )
-                    )
-                }
-
-                // Bottom Progress Overlay
-                AnimatedVisibility(
-                    visible = isUIVisible,
-                    enter = slideInVertically(initialOffsetY = { it }),
-                    exit = slideOutVertically(targetOffsetY = { it }),
-                    modifier = Modifier.align(Alignment.BottomCenter)
-                ) {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        color = Color.Black.copy(alpha = 0.5f)
-                    ) {
-                        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "${pagerState.currentPage + 1} / ${pages.size}",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = Color.White
-                                )
-                                LinearProgressIndicator(
-                                    progress = { (pagerState.currentPage + 1).toFloat() / pages.size },
-                                    modifier = Modifier.width(100.dp).height(2.dp),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    trackColor = Color.DarkGray
-                                )
-                            }
-                        }
-                    }
-                }
-
-                if (showJumpDialog) {
-                    var jumpPageText by remember { mutableStateOf((pagerState.currentPage + 1).toString()) }
-                    AlertDialog(
-                        onDismissRequest = { showJumpDialog = false },
-                        title = { Text("Jump to Page") },
-                        text = {
-                            Column {
-                                Text("Enter page number (1 - ${pages.size})")
-                                Spacer(modifier = Modifier.height(8.dp))
-                                TextField(
-                                    value = jumpPageText,
-                                    onValueChange = { jumpPageText = it },
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                    singleLine = true,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
-                        },
-                        confirmButton = {
-                            TextButton(onClick = {
-                                val page = jumpPageText.toIntOrNull()?.minus(1)
-                                if (page != null && page in pages.indices) {
-                                    scope.launch {
-                                        pagerState.scrollToPage(page)
-                                    }
-                                    showJumpDialog = false
-                                }
-                            }) {
-                                Text("Go")
-                            }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = { showJumpDialog = false }) {
-                                Text("Cancel")
-                            }
-                        }
-                    )
-                }
-
-                if (showRestartDialog) {
-                    AlertDialog(
-                        onDismissRequest = { showRestartDialog = false },
-                        title = { Text("Finished Comic") },
-                        text = { Text("You have already finished reading this comic. Would you like to start over from the beginning?") },
-                        confirmButton = {
-                            TextButton(onClick = {
-                                viewModel.resetProgress(uri)
-                                scope.launch { pagerState.scrollToPage(0) }
-                                showRestartDialog = false
-                            }) {
-                                Text("Start Over")
-                            }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = {
-                                scope.launch { pagerState.scrollToPage(pages.size - 1) }
-                                showRestartDialog = false
-                            }) {
-                                Text("Resume End")
-                            }
-                        }
-                    )
-                }
+            if (showJumpDialog) {
+                var jumpText by remember { mutableStateOf((pagerState.currentPage + 1).toString()) }
+                AlertDialog(
+                    onDismissRequest = { showJumpDialog = false },
+                    title = { Text("Jump to Page") },
+                    text = { TextField(value = jumpText, onValueChange = { jumpText = it }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)) },
+                    confirmButton = { TextButton(onClick = {
+                        jumpText.toIntOrNull()?.let { p -> if (p in 1..pages.size) scope.launch { pagerState.scrollToPage(p - 1) } }
+                        showJumpDialog = false
+                    }) { Text("Go") } }
+                )
             }
         }
     }
 }
 
-/**
- * Composable representing a single page in the comic reader.
- */
 @Composable
-fun ReaderPage(
-    uri: Uri,
-    entryName: String,
-    viewModel: ComicViewModel,
-    currentPage: Int,
-    pageIndex: Int,
-    readingMode: String,
-    onZoomChanged: (Boolean) -> Unit,
-    onToggleUI: () -> Unit
-) {
+fun ReaderPage(uri: Uri, entryName: String, viewModel: ComicViewModel, currentPage: Int, pageIndex: Int, readingMode: String, onZoomChanged: (Boolean) -> Unit, onToggleUI: () -> Unit) {
+    val configuration = LocalConfiguration.current
+    val density = LocalDensity.current
+    val screenWidth = with(density) { configuration.screenWidthDp.dp.roundToPx() }
+    val screenHeight = with(density) { configuration.screenHeightDp.dp.roundToPx() }
+
     var bitmap by remember { mutableStateOf<Bitmap?>(null) }
-    var loadError by remember { mutableStateOf(false) }
     
     LaunchedEffect(entryName) {
-        loadError = false
-        bitmap = viewModel.getPageBitmap(uri, entryName)
-        if (bitmap == null) loadError = true
+        bitmap = viewModel.getPageBitmap(uri, entryName, screenWidth, screenHeight)
     }
 
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        if (bitmap != null) {
-            ZoomableImage(
-                bitmap = bitmap!!,
-                modifier = Modifier.fillMaxSize(),
-                pageIndex = pageIndex,
-                currentPage = currentPage,
-                readingMode = readingMode,
-                onZoomChanged = onZoomChanged,
-                onToggleUI = onToggleUI
-            )
-        } else if (loadError) {
-            Text("Error loading page", color = Color.Red)
-        } else {
-            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-        }
+        bitmap?.let {
+            ZoomableImage(it, onZoomChanged, pageIndex, currentPage, onToggleUI, readingMode)
+        } ?: CircularProgressIndicator()
     }
 }
