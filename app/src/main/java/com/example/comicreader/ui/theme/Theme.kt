@@ -12,9 +12,9 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 /**
- * The dark color scheme for the Comic Reader application.
+ * The dark color scheme for the Eikonix application.
  */
-private val ComicDarkColorScheme = darkColorScheme(
+private val EikonixDarkColorScheme = darkColorScheme(
     primary = PrimaryDark,
     onPrimary = OnPrimaryDark,
     primaryContainer = PrimaryContainerDark,
@@ -34,9 +34,9 @@ private val ComicDarkColorScheme = darkColorScheme(
 )
 
 /**
- * The light color scheme for the Comic Reader application.
+ * The light color scheme for the Eikonix application.
  */
-private val ComicLightColorScheme = lightColorScheme(
+private val EikonixLightColorScheme = lightColorScheme(
     primary = PrimaryLight,
     onPrimary = OnPrimaryLight,
     primaryContainer = PrimaryContainerLight,
@@ -56,17 +56,17 @@ private val ComicLightColorScheme = lightColorScheme(
 )
 
 /**
- * The theme for the Comic Reader application.
+ * The theme for the Eikonix application.
  *
  * @param darkTheme Whether to use the dark theme.
  * @param content The composable content to apply the theme to.
  */
 @Composable
-fun ComicReaderTheme(
+fun EikonixTheme(
     darkTheme: Boolean = true,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (darkTheme) ComicDarkColorScheme else ComicLightColorScheme
+    val colorScheme = if (darkTheme) EikonixDarkColorScheme else EikonixLightColorScheme
     val view = LocalView.current
     
     if (!view.isInEditMode) {

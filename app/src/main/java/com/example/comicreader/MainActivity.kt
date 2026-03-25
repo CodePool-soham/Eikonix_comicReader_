@@ -84,7 +84,7 @@ import com.example.comicreader.data.AppDatabase
 import com.example.comicreader.data.DuplicateManager
 import com.example.comicreader.ui.AnalyticsScreen
 import com.example.comicreader.ui.DuplicateManagerScreen
-import com.example.comicreader.ui.theme.ComicReaderTheme
+import com.example.comicreader.ui.theme.EikonixTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -106,7 +106,7 @@ class MainActivity : ComponentActivity() {
             val duplicateManager = remember { DuplicateManager(context, db.comicDao()) }
             val analyticsManager = remember { AnalyticsManager(db.comicDao()) }
 
-            ComicReaderTheme(darkTheme = isDarkMode) {
+            EikonixTheme(darkTheme = isDarkMode) {
                 val navController = rememberNavController()
                 ComicApp(navController, isDarkMode, analyticsManager, duplicateManager, onToggleDarkMode = {
                     isDarkMode = it

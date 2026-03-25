@@ -1,6 +1,6 @@
-# Comic Vault
+# Eikonix
 
-A modern, Jetpack Compose-based Android application for reading comic books in `.cbz` and `.zip` formats. Inspired by the bold aesthetics of Marvel and DC, Comic Vault offers a seamless and immersive reading experience.
+A modern, Jetpack Compose-based Android application for reading comic books in `.cbz` and `.zip` formats. Inspired by the bold aesthetics of Marvel and DC, Eikonix offers a seamless and immersive reading experience.
 
 ## Features
 

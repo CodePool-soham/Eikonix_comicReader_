@@ -1,5 +1,5 @@
 [versions]
-agp = "8.13.2"
+agp = "9.1.0"
 kotlin = "2.1.0"
 coreKtx = "1.15.0"
 junit = "4.13.2"
@@ -13,7 +13,7 @@ coil = "2.7.0"
 documentfile = "1.0.1"
 materialIconsExtended = "1.7.5"
 junrar = "7.5.8"
-room = "2.6.1"
+room = "2.7.0-alpha11"
 ksp = "2.1.0-1.0.29"
 
 [libraries]

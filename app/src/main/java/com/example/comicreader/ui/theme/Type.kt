@@ -7,7 +7,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 /**
- * Set of Material typography styles for the Comic Reader application.
+ * Set of Material typography styles for the Eikonix application.
  */
 val Typography = Typography(
     bodyLarge = TextStyle(
