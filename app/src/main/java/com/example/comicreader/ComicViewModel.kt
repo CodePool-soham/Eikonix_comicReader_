@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.zip.ZipFile
 
 /**
  * ViewModel for managing the state and logic related to a comic.
@@ -35,12 +36,25 @@ class ComicViewModel(application: Application) : AndroidViewModel(application) {
     val currentUri: StateFlow<Uri?> = _currentUri
 
     private var cachedComicFile: File? = null
+    private var currentZipFile: ZipFile? = null
     private var cachedUri: Uri? = null
 
-    private val bitmapCache = object : LruCache<String, Bitmap>(3) {
+    // Bitmap cache: 1/8th of available memory
+    private val maxMemory = (Runtime.getRuntime().maxMemory() / 1024).toInt()
+    private val cacheSize = maxMemory / 8
+    
+    private val bitmapCache = object : LruCache<String, Bitmap>(cacheSize) {
+        override fun sizeOf(key: String, bitmap: Bitmap): Int {
+            return bitmap.byteCount / 1024
+        }
+
         override fun entryRemoved(evicted: Boolean, key: String?, oldValue: Bitmap?, newValue: Bitmap?) {
+            // Bitmaps are not recycled here to allow inBitmap reuse or if they are still being displayed
         }
     }
+
+    // Reuse pool for inBitmap
+    private val bitmapReusePool = mutableSetOf<Bitmap>()
 
     fun loadComic(uri: Uri) {
         if (cachedUri == uri && _currentComicPages.value.isNotEmpty()) return
@@ -58,6 +72,9 @@ class ComicViewModel(application: Application) : AndroidViewModel(application) {
                         if (name.endsWith(".cbr") || name.endsWith(".rar")) {
                             ComicUtils.getPagesFromCbr(file)
                         } else {
+                            // Close previous ZipFile if any
+                            currentZipFile?.close()
+                            currentZipFile = ZipFile(file)
                             ComicUtils.getPagesFromZip(file)
                         }
                     } else {
@@ -75,7 +92,7 @@ class ComicViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun ensureFileCached(uri: Uri) {
         if (cachedUri != uri || cachedComicFile == null || !cachedComicFile!!.exists()) {
-            clearCache()
+            clearResources()
             val fileName = ComicUtils.getFileName(getApplication(), uri) ?: "temp.cbz"
             val suffix = if (fileName.lowercase().endsWith(".cbr")) ".cbr" else ".cbz"
             val tempFile = File(getApplication<Application>().cacheDir, "current_comic$suffix")
@@ -99,13 +116,18 @@ class ComicViewModel(application: Application) : AndroidViewModel(application) {
                 val file = cachedComicFile
                 if (file != null && file.exists()) {
                     val name = file.name.lowercase()
+                    val inBitmap = bitmapReusePool.firstOrNull { it.isMutable && !it.isRecycled && !isBitmapInCache(it) }
+                    
                     val bitmap = if (name.endsWith(".cbr") || name.endsWith(".rar")) {
-                        ComicUtils.getPageBitmapFromCbr(file, entryName, reqWidth, reqHeight)
+                        ComicUtils.getPageBitmapFromCbr(file, entryName, reqWidth, reqHeight, inBitmap)
                     } else {
-                        ComicUtils.getPageBitmapFromZip(file, entryName, reqWidth, reqHeight)
+                        val zip = currentZipFile ?: ZipFile(file).also { currentZipFile = it }
+                        ComicUtils.getPageBitmapFromZip(zip, entryName, reqWidth, reqHeight, inBitmap)
                     }
+
                     if (bitmap != null) {
                         bitmapCache.put(cacheKey, bitmap)
+                        if (bitmap.isMutable) bitmapReusePool.add(bitmap)
                     }
                     bitmap
                 } else null
@@ -116,16 +138,25 @@ class ComicViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun clearCache() {
+    private fun isBitmapInCache(bitmap: Bitmap): Boolean {
+        val snapshot = bitmapCache.snapshot()
+        return snapshot.values.contains(bitmap)
+    }
+
+    private fun clearResources() {
+        currentZipFile?.close()
+        currentZipFile = null
         cachedComicFile?.delete()
         cachedComicFile = null
         cachedUri = null
         bitmapCache.evictAll()
+        bitmapReusePool.forEach { if (!it.isRecycled) it.recycle() }
+        bitmapReusePool.clear()
     }
 
     override fun onCleared() {
         super.onCleared()
-        clearCache()
+        clearResources()
     }
 
     fun saveLastReadPage(uri: Uri, page: Int, totalPages: Int) {

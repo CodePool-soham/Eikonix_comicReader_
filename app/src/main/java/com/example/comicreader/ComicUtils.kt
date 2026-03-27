@@ -7,17 +7,16 @@ import android.net.Uri
 import android.provider.DocumentsContract
 import android.util.Log
 import com.github.junrar.Archive
-import java.io.BufferedInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.security.MessageDigest
 import java.util.regex.Pattern
 import java.util.zip.ZipFile
-import java.util.zip.ZipInputStream
 
 /**
  * Utility object for comic book related operations, such as reading .cbz and .cbr files.
+ * Optimized for performance and memory efficiency.
  */
 object ComicUtils {
     private const val TAG = "ComicUtils"
@@ -25,45 +24,18 @@ object ComicUtils {
     /**
      * Extracts a list of entry names representing pages from a comic file (.cbz or .cbr).
      */
-    fun getPages(context: Context, uri: Uri): List<String> {
-        val fileName = getFileName(context, uri)?.lowercase() ?: ""
-        val tempFile = File(context.cacheDir, "temp_pages_${System.currentTimeMillis()}_${fileName.substringAfterLast("/", "")}")
+    fun getPages(file: File): List<String> {
+        val fileName = file.name.lowercase()
         return try {
-            copyUriToFile(context, uri, tempFile)
             if (fileName.endsWith(".cbr") || fileName.endsWith(".rar")) {
-                getPagesFromCbr(tempFile)
+                getPagesFromCbr(file)
             } else {
-                getPagesFromZip(tempFile)
+                getPagesFromZip(file)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error getting pages", e)
             emptyList()
-        } finally {
-            tempFile.delete()
         }
-    }
-
-    fun getPagesFromCbz(context: Context, uri: Uri): List<String> {
-        val pages = mutableListOf<String>()
-        try {
-            context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                ZipInputStream(BufferedInputStream(inputStream)).use { zipInputStream ->
-                    var entry = zipInputStream.nextEntry
-                    while (entry != null) {
-                        if (!entry.isDirectory &&
-                            !entry.name.contains("__MACOSX", ignoreCase = true) &&
-                            isImageFile(entry.name)) {
-                            pages.add(entry.name)
-                        }
-                        zipInputStream.closeEntry()
-                        entry = zipInputStream.nextEntry
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error reading CBZ pages from $uri", e)
-        }
-        return pages.sortedWith(NaturalOrderComparator())
     }
 
     fun getPagesFromZip(file: File): List<String> {
@@ -133,55 +105,43 @@ object ComicUtils {
         return inSampleSize
     }
 
-    fun getPageBitmapFromCbz(context: Context, uri: Uri, entryName: String): Bitmap? {
+    /**
+     * Decodes a bitmap from a ZipFile entry with optimized memory usage.
+     */
+    fun getPageBitmapFromZip(zipFile: ZipFile, entryName: String, reqWidth: Int = 0, reqHeight: Int = 0, inBitmap: Bitmap? = null): Bitmap? {
         try {
-            context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                ZipInputStream(BufferedInputStream(inputStream)).use { zipInputStream ->
-                    var entry = zipInputStream.nextEntry
-                    while (entry != null) {
-                        if (entry.name == entryName) {
-                            val options = BitmapFactory.Options()
-                            options.inPreferredConfig = Bitmap.Config.RGB_565
-                            return BitmapFactory.decodeStream(zipInputStream, null, options)
-                        }
-                        zipInputStream.closeEntry()
-                        entry = zipInputStream.nextEntry
-                    }
-                }
+            val entry = zipFile.getEntry(entryName) ?: return null
+            
+            val options = BitmapFactory.Options().apply {
+                inJustDecodeBounds = true
+            }
+            zipFile.getInputStream(entry).use { inputStream ->
+                BitmapFactory.decodeStream(inputStream, null, options)
+            }
+
+            options.inSampleSize = calculateInSampleSize(options, reqWidth, reqHeight)
+            options.inJustDecodeBounds = false
+            options.inPreferredConfig = Bitmap.Config.RGB_565
+            
+            // Enable bitmap reuse if possible
+            if (inBitmap != null && canUseForInBitmap(inBitmap, options)) {
+                options.inBitmap = inBitmap
+                options.inMutable = true
+            }
+
+            return zipFile.getInputStream(entry).use { inputStream ->
+                BitmapFactory.decodeStream(inputStream, null, options)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error getting CBZ page bitmap: $entryName from $uri", e)
+            Log.e(TAG, "Error decoding ZIP entry: $entryName", e)
         }
         return null
     }
 
-    fun getPageBitmapFromZip(file: File, entryName: String, reqWidth: Int = 0, reqHeight: Int = 0): Bitmap? {
-        try {
-            ZipFile(file).use { zipFile ->
-                val entry = zipFile.getEntry(entryName) ?: return null
-                
-                val options = BitmapFactory.Options().apply {
-                    inJustDecodeBounds = true
-                }
-                zipFile.getInputStream(entry).use { inputStream ->
-                    BitmapFactory.decodeStream(inputStream, null, options)
-                }
-
-                options.inSampleSize = calculateInSampleSize(options, reqWidth, reqHeight)
-                options.inJustDecodeBounds = false
-                options.inPreferredConfig = Bitmap.Config.RGB_565
-
-                return zipFile.getInputStream(entry).use { inputStream ->
-                    BitmapFactory.decodeStream(inputStream, null, options)
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error getting ZIP page bitmap: $entryName", e)
-        }
-        return null
-    }
-
-    fun getPageBitmapFromCbr(file: File, entryName: String, reqWidth: Int = 0, reqHeight: Int = 0): Bitmap? {
+    /**
+     * Decodes a bitmap from a CBR archive with optimized memory usage.
+     */
+    fun getPageBitmapFromCbr(file: File, entryName: String, reqWidth: Int = 0, reqHeight: Int = 0, inBitmap: Bitmap? = null): Bitmap? {
         try {
             Archive(file).use { archive ->
                 val header = archive.fileHeaders.find { it.fileNameString == entryName } ?: return null
@@ -197,13 +157,26 @@ object ComicUtils {
                 options.inSampleSize = calculateInSampleSize(options, reqWidth, reqHeight)
                 options.inJustDecodeBounds = false
                 options.inPreferredConfig = Bitmap.Config.RGB_565
-                
+
+                if (inBitmap != null && canUseForInBitmap(inBitmap, options)) {
+                    options.inBitmap = inBitmap
+                    options.inMutable = true
+                }
+
                 return BitmapFactory.decodeByteArray(data, 0, data.size, options)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error getting CBR page bitmap: $entryName", e)
+            Log.e(TAG, "Error decoding CBR entry: $entryName", e)
         }
         return null
+    }
+
+    private fun canUseForInBitmap(candidate: Bitmap, targetOptions: BitmapFactory.Options): Boolean {
+        val width = targetOptions.outWidth / targetOptions.inSampleSize
+        val height = targetOptions.outHeight / targetOptions.inSampleSize
+        // For RGB_565, it's 2 bytes per pixel
+        val byteCount = width * height * 2
+        return candidate.isMutable && !candidate.isRecycled && candidate.allocationByteCount >= byteCount
     }
 
     fun getThumbnailFile(context: Context, uri: Uri): File? {
@@ -211,7 +184,7 @@ object ComicUtils {
         if (!cacheDir.exists()) cacheDir.mkdirs()
 
         val fileNameHash = md5(uri.toString())
-        val thumbnailFile = File(cacheDir, "$fileNameHash.jpg")
+        val thumbnailFile = File(cacheDir, "$fileNameHash.webp")
 
         if (thumbnailFile.exists()) return thumbnailFile
 
@@ -228,12 +201,14 @@ object ComicUtils {
                 val bitmap = if (isRar) {
                     getPageBitmapFromCbr(tempFile, firstPage, 300, 450)
                 } else {
-                    getPageBitmapFromZip(tempFile, firstPage, 300, 450)
+                    ZipFile(tempFile).use { zipFile ->
+                        getPageBitmapFromZip(zipFile, firstPage, 300, 450)
+                    }
                 }
 
                 bitmap?.let {
                     FileOutputStream(thumbnailFile).use { out ->
-                        it.compress(Bitmap.CompressFormat.JPEG, 70, out)
+                        it.compress(Bitmap.CompressFormat.WEBP, 85, out)
                     }
                     it.recycle()
                     tempFile.delete()
